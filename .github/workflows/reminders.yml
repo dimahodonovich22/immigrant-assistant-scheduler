@@ -1,0 +1,37 @@
+name: Telegram reminders
+
+on:
+  schedule:
+    - cron: "3-58/5 * * * *"
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: immigrant-assistant-reminders
+  cancel-in-progress: false
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Dispatch due reminders
+        shell: bash
+        run: |
+          set -euo pipefail
+          token_response="$(curl --fail --silent --show-error \
+            -H "Authorization: Bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" \
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=immigrant-assistant-reminders")"
+          oidc_token="$(printf '%s' "$token_response" | jq -r '.value')"
+          test -n "$oidc_token"
+          test "$oidc_token" != "null"
+          curl --fail-with-body --silent --show-error --retry 2 \
+            -X POST \
+            -H "Authorization: Bearer ${oidc_token}" \
+            "https://immigrant-assistant.branly-co.chatgpt.site/api/internal/reminders"
